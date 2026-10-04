@@ -1,0 +1,297 @@
+-- ============================================================
+-- measures.dax
+--
+-- Proyecto: Manufacturing Operations & Demand Planning Analytics
+-- Empresa ficticia: NovaTech Electronics
+--
+-- Propósito:
+-- Contiene las medidas DAX usadas en el dashboard de Power BI.
+-- Están organizadas por bloque temático:
+--
+--   1. Demanda
+--   2. Inventario
+--   3. Producción
+--   4. Proveedores
+--   5. Riesgo (Fulfillment Risk Score)
+--   6. Formato condicional (colores)
+--
+-- Nota:
+-- Las medidas están en una tabla independiente llamada _measures.
+-- ============================================================
+
+
+-- ============================================================
+-- 1. DEMANDA
+-- ============================================================
+
+-- Suma total de la demanda (actual + forecast)
+MEASURE '_measures'[Total Demand] =
+    SUM(fact_demand[demand_qty])
+
+-- Demanda real (excluye forecast)
+MEASURE '_measures'[Actual Demand] =
+    CALCULATE(
+        [Total Demand],
+        fact_demand[demand_type] = "Actual"
+    )
+
+-- Demanda proyectada (forecast)
+MEASURE '_measures'[Forecast Demand] =
+    CALCULATE(
+        [Total Demand],
+        fact_demand[demand_type] = "Forecast"
+    )
+
+-- Crecimiento de demanda 2026 vs 2025 (enero–agosto)
+MEASURE '_measures'[Demand Growth %] =
+    VAR Demand2025 =
+        CALCULATE(
+            [Actual Demand],
+            dim_date[year] = 2025,
+            dim_date[month_number] <= 8
+        )
+    VAR Demand2026 =
+        CALCULATE(
+            [Actual Demand],
+            dim_date[year] = 2026,
+            dim_date[month_number] <= 8
+        )
+    RETURN
+        DIVIDE(
+            Demand2026 - Demand2025,
+            Demand2025,
+            0
+        )
+
+
+-- ============================================================
+-- 2. INVENTARIO
+-- ============================================================
+
+-- Inventario promedio (promedio de los snapshots disponibles)
+MEASURE '_measures'[Average Inventory] =
+    AVERAGE(fact_inventory[inventory_qty])
+
+-- Cobertura de inventario en meses
+-- Fórmula: Average Inventory / Average Monthly Demand
+MEASURE '_measures'[Inventory Coverage Months] =
+    VAR AvgMonthlyDemand =
+        DIVIDE(
+            CALCULATE(
+                [Actual Demand],
+                dim_date[year] = 2026,
+                dim_date[month_number] <= 8
+            ),
+            8,
+            0
+        )
+    RETURN
+        DIVIDE(
+            [Average Inventory],
+            AvgMonthlyDemand,
+            0
+        )
+
+-- Cobertura promedio por producto
+MEASURE '_measures'[Average Product Coverage] =
+    AVERAGEX(
+        VALUES(dim_product[product_key]),
+        [Inventory Coverage Months]
+    )
+
+
+-- ============================================================
+-- 3. PRODUCCIÓN
+-- ============================================================
+
+-- Producción planeada (suma)
+MEASURE '_measures'[Planned Production] =
+    SUM(fact_production[planned_qty])
+
+-- Producción real (suma)
+MEASURE '_measures'[Actual Production] =
+    SUM(fact_production[actual_qty])
+
+-- Brecha de producción (real - planeada)
+MEASURE '_measures'[Production Gap] =
+    [Actual Production] - [Planned Production]
+
+-- Cumplimiento de producción (%)
+MEASURE '_measures'[Production Attainment %] =
+    DIVIDE(
+        [Actual Production],
+        [Planned Production],
+        0
+    )
+
+
+-- ============================================================
+-- 4. PROVEEDORES
+-- ============================================================
+
+-- Tasa de retraso de proveedores (%)
+-- Solo sobre órdenes recibidas
+MEASURE '_measures'[Supplier Late Rate %] =
+    VAR ReceivedOrders =
+        CALCULATE(
+            COUNTROWS(fact_purchase_orders),
+            NOT ISBLANK(fact_purchase_orders[receipt_date])
+        )
+    VAR LateOrders =
+        CALCULATE(
+            COUNTROWS(fact_purchase_orders),
+            NOT ISBLANK(fact_purchase_orders[receipt_date]),
+            fact_purchase_orders[receipt_date]
+                > fact_purchase_orders[promised_date]
+        )
+    RETURN
+        DIVIDE(
+            LateOrders,
+            ReceivedOrders,
+            0
+        )
+
+-- Retraso promedio en días (solo órdenes tardías)
+MEASURE '_measures'[Average Late Delay Days] =
+    AVERAGEX(
+        FILTER(
+            fact_purchase_orders,
+            NOT ISBLANK(fact_purchase_orders[receipt_date])
+                &&
+            fact_purchase_orders[receipt_date]
+                > fact_purchase_orders[promised_date]
+        ),
+        DATEDIFF(
+            fact_purchase_orders[promised_date],
+            fact_purchase_orders[receipt_date],
+            DAY
+        )
+    )
+
+-- Cantidad de PO abiertas (sin receipt_date)
+MEASURE '_measures'[Open PO Quantity] =
+    CALCULATE(
+        SUM(fact_purchase_orders[ordered_qty]),
+        ISBLANK(fact_purchase_orders[receipt_date])
+    )
+
+-- Líneas de PO recibidas
+MEASURE '_measures'[Received PO Lines] =
+    CALCULATE(
+        COUNTROWS(fact_purchase_orders),
+        NOT ISBLANK(fact_purchase_orders[receipt_date])
+    )
+
+
+-- ============================================================
+-- 5. RIESGO (FULFILLMENT RISK SCORE)
+-- ============================================================
+
+-- Componentes del riesgo (cada uno vale 2 si se cumple)
+MEASURE '_measures'[Demand Growth Risk] =
+    IF(
+        [Demand Growth %] > 0.20,
+        2,
+        0
+    )
+
+MEASURE '_measures'[Inventory Coverage Risk] =
+    IF(
+        [Inventory Coverage Months] < 0.50,
+        2,
+        0
+    )
+
+MEASURE '_measures'[Production Risk] =
+    IF(
+        [Production Attainment %] < 0.90,
+        2,
+        0
+    )
+
+-- Risk Score total (suma de los 3 componentes)
+-- Escala: 0 (sin riesgo) a 6 (riesgo crítico)
+MEASURE '_measures'[Fulfillment Risk Score] =
+    VAR DemandGrowth = [Demand Growth %]
+    VAR InventoryCoverage = [Inventory Coverage Months]
+    VAR ProductionAttainment = [Production Attainment %]
+
+    VAR DemandRisk =
+        IF(DemandGrowth > 0.20, 2, 0)
+
+    VAR InventoryRisk =
+        IF(InventoryCoverage < 0.50, 2, 0)
+
+    VAR ProductionRisk =
+        IF(ProductionAttainment < 0.90, 2, 0)
+
+    RETURN
+        DemandRisk + InventoryRisk + ProductionRisk
+
+-- Productos en alto riesgo (score = 6)
+MEASURE '_measures'[High Risk Products] =
+    COUNTROWS(
+        FILTER(
+            VALUES(dim_product[product_key]),
+            [Fulfillment Risk Score] >= 6
+        )
+    )
+
+-- Productos que requieren atención (score >= 4)
+MEASURE '_measures'[Products Requiring Attention] =
+    COUNTROWS(
+        FILTER(
+            VALUES(dim_product[product_key]),
+            [Fulfillment Risk Score] >= 4
+        )
+    )
+
+
+-- ============================================================
+-- 6. FORMATO CONDICIONAL (COLORES)
+-- ============================================================
+
+-- Color según Demand Growth % e Inventory Coverage
+MEASURE '_measures'[Risk Color] =
+    VAR Growth = [Demand Growth %]
+    VAR Coverage = [Inventory Coverage Months]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Growth > 0.20 && Coverage < 0.50, "#D96B5F",  -- Rojo
+            Growth > 0.20 || Coverage < 0.50, "#D99A2B",  -- Amarillo
+            "#238B8D"                                       -- Teal
+        )
+
+-- Color según cobertura promedio
+MEASURE '_measures'[Coverage Color] =
+    VAR Coverage = [Average Product Coverage]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Coverage < 0.50, "#D96B5F",   -- Rojo (crítico)
+            Coverage < 1.00, "#D99A2B",   -- Ámbar (atención)
+            "#2E8B57"                      -- Verde (normal)
+        )
+
+-- Color según cumplimiento de producción
+MEASURE '_measures'[Production Attainment Color] =
+    VAR Attainment = [Production Attainment %]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Attainment < 0.90, "#D96B5F",   -- Rojo
+            Attainment < 0.95, "#D99A2B",   -- Ámbar
+            "#2F9E74"                        -- Verde
+        )
+
+-- Color según Risk Score
+MEASURE '_measures'[Risk Score Color] =
+    VAR Score = [Fulfillment Risk Score]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Score >= 6, "#D96B5F",   -- Rojo (crítico)
+            Score >= 4, "#D99A2B",   -- Ámbar (atención)
+            "#238B8D"                -- Teal (normal)
+        )
