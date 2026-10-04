@@ -2,6 +2,16 @@
 
 **NovaTech Electronics — Proyecto de portafolio | PostgreSQL · SQL · Power BI · DAX**
 
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![SQL](https://img.shields.io/badge/SQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Power BI](https://img.shields.io/badge/Power%20BI-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
+![DAX](https://img.shields.io/badge/DAX-5E5E5E?style=for-the-badge&logo=powerbi&logoColor=white)
+![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
+![VS Code](https://img.shields.io/badge/VS%20Code-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)
+
+![Demand & Inventory](images/page1_demand_inventory.png)
+
 ---
 
 ## 📌 Descripción del proyecto
@@ -105,6 +115,8 @@ Estos problemas se documentan y se tratan en la capa de staging.
 
 ## 🧱 Modelo de datos
 
+![Data Model](images/data_model.png)
+
 El modelo final es un **esquema en estrella** con 5 dimensiones y 4 tablas de hechos:
 
 ### Dimensiones
@@ -123,6 +135,28 @@ El modelo final es un **esquema en estrella** con 5 dimensiones y 4 tablas de he
 ### Decisión técnica clave
 
 Las métricas derivadas (días de retraso, brecha de producción, cumplimiento) **no se almacenan** en las tablas de hechos. Se calculan en SQL y DAX. Esto mantiene el modelo limpio y demuestra que entiendo la diferencia entre datos fuente y métricas calculadas.
+
+### Scripts SQL y DAX
+
+Los scripts del proyecto están organizados así:
+
+- `sql/01_create_raw_tables.sql` — Creación de las 8 tablas RAW.
+- `sql/02_staging_transformations.sql` — Limpieza, normalización y validación.
+- `sql/03_analytics_model.sql` — Construcción del modelo dimensional.
+- `sql/04_business_analysis.sql` — Consultas de análisis y data quality.
+- `dax/measures.dax` — Medidas DAX del dashboard.
+
+Las métricas derivadas (días de retraso, brecha de producción, cumplimiento) se calculan en SQL y DAX, no se almacenan en las tablas de hechos.
+
+**Ejemplo de medida DAX:**
+
+```dax
+Fulfillment Risk Score =
+    VAR DemandRisk = IF([Demand Growth %] > 0.20, 2, 0)
+    VAR InventoryRisk = IF([Inventory Coverage Months] < 0.50, 2, 0)
+    VAR ProductionRisk = IF([Production Attainment %] < 0.90, 2, 0)
+    RETURN DemandRisk + InventoryRisk + ProductionRisk
+```
 
 ---
 
@@ -162,6 +196,7 @@ flowchart TD
 El reporte en Power BI tiene **3 páginas**, cada una enfocada en una pregunta de negocio.
 
 ### Página 1 — Demand & Inventory
+![Demand & Inventory](images/page1_demand_inventory.png)
 
 **Pregunta:** ¿Cómo está evolucionando la demanda y tenemos suficiente inventario?
 
@@ -180,6 +215,7 @@ El reporte en Power BI tiene **3 páginas**, cada una enfocada en una pregunta d
 ---
 
 ### Página 2 — Production & Supply
+![Production & Supply](images/page2_production_supply.png)
 
 **Pregunta:** ¿Qué factores operativos pueden estar limitando el cumplimiento?
 
@@ -199,6 +235,7 @@ El reporte en Power BI tiene **3 páginas**, cada una enfocada en una pregunta d
 ---
 
 ### Página 3 — Fulfillment Risk
+![Fulfillment Risk](images/page3_fulfillment_risk.png)
 
 **Pregunta:** ¿Dónde debería concentrarse primero el equipo de planeación?
 
@@ -213,6 +250,20 @@ El reporte en Power BI tiene **3 páginas**, cada una enfocada en una pregunta d
 - Exposición de proveedores en productos en riesgo.
 - Heatmap de señales de riesgo.
 - Panel de insights.
+
+
+### Diseño y paleta de colores
+
+El dashboard usa una paleta consistente para comunicar riesgo:
+
+| Color | Hex | Significado |
+| :--- | :--- | :--- |
+| Rojo | `#D96B5F` | Riesgo crítico |
+| Ámbar | `#D99A2B` | Requiere atención |
+| Teal | `#238B8D` | Normal |
+| Verde | `#2E8B57` | Positivo |
+
+Los colores se aplican dinámicamente con medidas DAX (`Risk Color`, `Coverage Color`, `Production Attainment Color`, `Risk Score Color`), de modo que el dashboard responde automáticamente a los datos.
 
 ---
 
