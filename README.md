@@ -32,9 +32,6 @@ flowchart TD
     D --> E[Business insights y recomendaciones]
 ```
 
-
-> **Nota:** NovaTech Electronics es una empresa ficticia. Los datos son sintéticos y fueron diseñados para representar problemas operativos reales. No representan a Flex, Jabil, PiSA ni a ninguna empresa real.
-
 ---
 
 ## 🏢 Contexto de negocio
@@ -293,8 +290,8 @@ Con estas dos señales, cada producto se clasifica en cuatro cuadrantes:
 1. **6 productos en alto riesgo (score = 6):** combinan demanda creciente, baja cobertura de inventario y producción por debajo del objetivo.
 2. **20 productos requieren atención (score 4–6):** no todos son críticos, pero deben monitorearse.
 3. **Cobertura promedio de 0.66 meses:** el inventario actual no alcanza a cubrir un mes completo de demanda en promedio.
-4. **Production attainment del 92.25%:** la producción está por debajo del objetivo del 90% en al menos una planta.
-5. **Supplier late rate del 18.94%:** casi 1 de cada 5 órdenes de compra llega tarde.
+4. **Production attainment del 92.25%:** la producción general supera el objetivo del 90%, aunque existen brechas de desempeño en determinadas plantas.
+5. **Supplier late rate del 18.94%:** aproximadamente 1 de cada 5 líneas de órdenes de compra recibidas presenta retraso.
 6. **Proveedores críticos:** Taiwan Semico (60%) y Vietnam Embed (57.14%) tienen las tasas de retraso más altas.
 7. **Riesgo concentrado:** la mayoría de los productos en riesgo combinan múltiples señales, no solo una.
 
